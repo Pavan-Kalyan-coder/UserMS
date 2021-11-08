@@ -33,16 +33,11 @@ public class SellerController {
 	
 	//Create New Seller
 	@PostMapping(value = "/seller/register",  consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<String> createSeller(@RequestBody SellerDTO sellerDTO) {
+	public ResponseEntity<String> createSeller(@RequestBody SellerDTO sellerDTO) throws UserException {
 		logger.info("Creation request for seller {}", sellerDTO);
 		String result;
-		try {
-			result = userService.createSeller(sellerDTO);
-			return new ResponseEntity<String>(result, HttpStatus.OK);
-		} catch (UserException e) {
-			String s = environment.getProperty(e.getMessage());
-			return new ResponseEntity<>(s,HttpStatus.EXPECTATION_FAILED);
-		}
+		result = userService.createSeller(sellerDTO);
+		return new ResponseEntity<String>(result, HttpStatus.OK);
 		
 	}
 	

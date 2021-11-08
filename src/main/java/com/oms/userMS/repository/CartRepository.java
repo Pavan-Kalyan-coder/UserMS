@@ -12,4 +12,6 @@ import com.oms.userMS.entity.CartPK;
 public interface CartRepository extends CrudRepository<Cart, CartPK>{
 
 	List<Cart> findByBuyerID(String buyerID);
+
+	List<Cart> findByProductID(String productID);
 }

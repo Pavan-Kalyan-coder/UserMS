@@ -41,7 +41,12 @@ public class BuyerController {
 	
 	@Value("${product.uri}")
 	String prodUri;
+	
+	@Value("${producer.uri}")
+	String producerUri;
 
+	@Value("${order.uri}")
+	String orderUri;
 	
 	//Buyer Register
 	@PostMapping(value = "/buyer/register",  consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -49,13 +54,11 @@ public class BuyerController {
 		logger.info("Creation request for buyer {}", buyerDTO);
 		String result;
 		try {
-			logger.info("Creation request for buyer {}", buyerDTO);
 			result = userService.createBuyer(buyerDTO);
-			logger.info("Creation request for buyer {}", buyerDTO);
 			return new ResponseEntity<String>(result, HttpStatus.OK);
 		} catch (UserException e) {
-			String s = e.getMessage();
-			return new ResponseEntity<>(s,HttpStatus.EXPECTATION_FAILED);
+			result = e.getMessage();
+			return new ResponseEntity<>(result,HttpStatus.EXPECTATION_FAILED);
 		}
 		
 	}
@@ -63,7 +66,7 @@ public class BuyerController {
 	// Login Buyer
 	@PostMapping(value = "/buyer/login",consumes = MediaType.APPLICATION_JSON_VALUE)
 	public ResponseEntity<String> buyerLogin(@RequestBody LoginDTO loginDTO) {
-		logger.info("Login request for buyer {} with password {}", loginDTO.getEmailID(),loginDTO.getPassword());
+		logger.info("Login request for buyer {}", loginDTO.getEmailID());
 		String result;
 		try {
 			result = userService.buyerLogin(loginDTO);
@@ -98,6 +101,12 @@ public class BuyerController {
 		logger.info("Deleting Buyer {}", buyerID);
 		String result;
 		try {
+			
+			// delete subscribed products and orders and products ordered
+			new RestTemplate().delete(prodUri+"/products/deletesubscription/{buyerID}", buyerID);
+			new RestTemplate().delete(orderUri+"/orderMS/deleteorders/{buyerID}", buyerID);
+			new RestTemplate().delete(orderUri+"/orderMS/deleteproductsordered/{buyerID}", buyerID);
+
 			result = userService.deleteBuyer(buyerID);
 			return new ResponseEntity<String>(result, HttpStatus.OK);
 		} catch (UserException e) {
@@ -155,7 +164,9 @@ public class BuyerController {
 			ProductDTO productDTO = getProductFromProductMSByProductID(productID);
 			String result1 = userService.removeFromWishList(buyerID, productDTO.getProductID());
 			String result2 = userService.addToCart(buyerID, productDTO.getProductID(), quantity);
-			String result = result1+" "+result2;
+			String message = buyerID+" "+productID+" "+String.valueOf(quantity);
+			String response = new RestTemplate().postForObject(producerUri+"producer/publish/message", message, String.class);
+			String result = result1+" "+result2+" "+response;
 			return new ResponseEntity<>(result,HttpStatus.ACCEPTED);
 		}
 		catch(Exception e)
@@ -173,7 +184,10 @@ public class BuyerController {
 		try 
 		{
 			ProductDTO productDTO = getProductFromProductMSByProductID(productID);
+			int prevQuantity = userService.getQuantityByBuyerIDAndProductID(buyerID, productID);
 			String msg = userService.addToCart(buyerID, productDTO.getProductID(), quantity);
+			String message = buyerID+" "+productID+" "+String.valueOf(quantity-prevQuantity);
+			String response = new RestTemplate().postForObject(producerUri+"producer/publish/message", message, String.class);
 			return new ResponseEntity<>(msg,HttpStatus.ACCEPTED);
 		}
 		catch(Exception e)
@@ -187,12 +201,11 @@ public class BuyerController {
 	@DeleteMapping(value = "/buyer/cart/remove/{buyerID}/{productID}")
 	public ResponseEntity<String> removeProductFromCart(@PathVariable String buyerID, @PathVariable String productID) throws Exception
 	{
-//		logger.info("strat");
 		try 
 		{
 //			logger.info("strat");
 			ProductDTO productDTO = getProductFromProductMSByProductID(productID);
-//			logger.info("end");
+			logger.info("end");
 			String msg = userService.removeFromCart(buyerID, productDTO.getProductID());
 			logger.info(msg);
 			return new ResponseEntity<>(msg,HttpStatus.ACCEPTED);
@@ -204,7 +217,7 @@ public class BuyerController {
 		}
 	}
 	// Buyer update product quantity in cart
-	@PostMapping(value = "/buyer/cart/updatequantity/{buyerID}/{productID}/{quantity}")
+	@PutMapping(value = "/buyer/cart/updatequantity/{buyerID}/{productID}/{quantity}")
 	public ResponseEntity<String> updateProductQuantityInCart(@PathVariable String buyerID, @PathVariable String productID,@PathVariable int quantity) throws Exception
 	{
 		try 
@@ -222,7 +235,7 @@ public class BuyerController {
 	
 	// Buyer fetch all products in cart
 	@GetMapping(value = "/buyer/cart/getallproducts/{buyerID}")
-	public ResponseEntity<List<CartDTO>> updateProductQuantityInCart(@PathVariable String buyerID) throws Exception
+	public ResponseEntity<List<CartDTO>> getCartProducts(@PathVariable String buyerID) throws Exception
 	{
 		try 
 		{
@@ -261,15 +274,71 @@ public class BuyerController {
 	}
 	
 	// update reward points
-	@PutMapping(value = "/buyer/updaterewardpoints/{buyerID}/{rewardPoints}")
+	@PutMapping(value = "/buyer/addrewardpoints/{buyerID}/{rewardPoints}")
 	public ResponseEntity<String> buyerAccumulateRewardPoints(@PathVariable String buyerID, @PathVariable String rewardPoints) {
 		logger.info("buyer {} request for updating reward points", buyerID);
-		String result = userService.updateRewardPoints(buyerID, rewardPoints);
+		String result = userService.addRewardPoints(buyerID, rewardPoints);
 		return new ResponseEntity<String>(result, HttpStatus.OK);
 	}
 
 	
+	// ********************END POINTS used by Product MS when a product is DELETED*********************
+	// Buyer remove product from cart
+	@DeleteMapping(value = "/buyer/cart/remove/{productID}")
+	public ResponseEntity<String> removeProductFromCartByProductId(@PathVariable String productID) throws Exception
+	{
+		try 
+		{
+			ProductDTO productDTO = getProductFromProductMSByProductID(productID);
+			String msg = userService.removeFromCartByProduct(productDTO.getProductID());
+			logger.info(msg);
+			return new ResponseEntity<>(msg,HttpStatus.ACCEPTED);
+		}
+		catch(Exception e)
+		{
+			String msg = handleException(e);
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND,msg,e);
+		}
+	}
 	
+	@DeleteMapping(value = "/buyer/wishlist/remove/{productID}")
+	public ResponseEntity<String> removeProductFromWishListByProductId(@PathVariable String productID) throws Exception
+	{
+		try 
+		{
+			ProductDTO productDTO = getProductFromProductMSByProductID(productID);
+			String msg = userService.removeFromWishListByProduct(productDTO.getProductID());
+			logger.info(msg);
+			return new ResponseEntity<>(msg,HttpStatus.ACCEPTED);
+		}
+		catch(Exception e)
+		{
+			String msg = handleException(e);
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND,msg,e);
+		}
+	}
+	
+	//**********************************************************************//
+	
+	
+	// ********************END POINTS used by Consumer when a product is added to cart*********************
+	@GetMapping(value = "/buyer/getQuantityByBuyerIDAndProductID/{buyerID}/{productID}")
+	public ResponseEntity<Integer> getQuantityByBuyerIDAndProductID(@PathVariable String buyerID, @PathVariable String productID) throws Exception
+	{
+		try 
+		{
+			int prevQuantity = userService.getQuantityByBuyerIDAndProductID(buyerID, productID);
+			return new ResponseEntity<>(prevQuantity,HttpStatus.ACCEPTED);
+		}
+		catch(Exception e)
+		{
+			System.out.println(e.getMessage());
+			String msg = e.getMessage();
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, msg, e);
+		}
+	}
+	
+	// *********************************************************************************8
 	
 	
 	
