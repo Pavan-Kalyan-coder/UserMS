@@ -15,8 +15,6 @@
 	<description>UserServiceMS</description>
 	<properties>
 		<java.version>11</java.version>
-		<sonar.organization>pavankalyanorg</sonar.organization>
-		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
 	</properties> 
 	<dependencies>
 		<dependency>
@@ -40,7 +38,6 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		
 	</dependencies>
 
 	<build>
